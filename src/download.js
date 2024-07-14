@@ -14,16 +14,22 @@ let downloadInfo = {
   progress: 0,
   timePoints: [],
   speeds: [],
-  peers: []
+  peers: [],
+  downloadedSize: 0,
+  uploadedSize: 0,
+  remainingSize: 0,
+  status: 'Initializing'
 };
 
 module.exports = (torrent, path, donut, lineChart, infoBox, peerTable, screen) => {
   downloadInfo.fileName = path;
   downloadInfo.fileSize = torrentParser.size(torrent);
+  downloadInfo.remainingSize = downloadInfo.fileSize;
 
   tracker.getPeers(torrent, peers => {
     console.log(`Got ${peers.length} peers`);
     downloadInfo.peers = peers.map(peer => ({...peer, connected: false}));
+    downloadInfo.status = peers.length > 0 ? 'Connecting to peers' : 'No peers found';
     
     if (peers.length === 0) {
       console.warn('No peers found. The torrent might be dead or the tracker might be unreachable.');
@@ -132,7 +138,11 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
   const offset = pieceResp.index * torrent.info['piece length'] + pieceResp.begin;
   fs.write(file, pieceResp.block, 0, pieceResp.block.length, offset, () => {});
 
+  downloadInfo.downloadedSize += pieceResp.block.length;
+  downloadInfo.remainingSize = downloadInfo.fileSize - downloadInfo.downloadedSize;
   downloadInfo.progress = (pieces.received / pieces.total) * 100;
+  downloadInfo.status = 'Downloading';
+
   const now = Date.now();
   downloadInfo.timePoints.push(now);
   downloadInfo.speeds.push(pieceResp.block.length / 1024); // KB/s
@@ -145,6 +155,7 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
 
   if (pieces.isDone()) {
     console.log('Download complete!');
+    downloadInfo.status = 'Complete';
     socket.end();
     try { fs.closeSync(file); } catch(e) {}
   } else {

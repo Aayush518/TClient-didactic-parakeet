@@ -75,7 +75,20 @@ function updateUI(downloadInfo) {
   } else {
     donut.setData([{percent: downloadInfo.progress, label: 'Progress', color: 'green'}]);
     lineChart.setData([{x: downloadInfo.timePoints, y: downloadInfo.speeds, title: 'Speed'}]);
-    infoBox.setContent(`File: ${downloadInfo.fileName}\nSize: ${downloadInfo.fileSize}\nPeers: ${downloadInfo.peers.length}`);
+    
+    const fileSizeInMB = (downloadInfo.fileSize / (1024 * 1024)).toFixed(2);
+    const downloadedSizeInMB = (downloadInfo.downloadedSize / (1024 * 1024)).toFixed(2);
+    const remainingSizeInMB = (downloadInfo.remainingSize / (1024 * 1024)).toFixed(2);
+    
+    infoBox.setContent(
+      `File: ${downloadInfo.fileName}\n` +
+      `Size: ${fileSizeInMB} MB\n` +
+      `Downloaded: ${downloadedSizeInMB} MB\n` +
+      `Remaining: ${remainingSizeInMB} MB\n` +
+      `Peers: ${downloadInfo.peers.length}\n` +
+      `Status: ${downloadInfo.status}`
+    );
+    
     peerTable.setData({
       headers: ['IP', 'Port', 'Connected'],
       data: downloadInfo.peers.map(peer => [peer.ip, peer.port, peer.connected ? 'Yes' : 'No'])

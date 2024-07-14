@@ -20,17 +20,14 @@ module.exports.size = torrent => {
   const size = torrent.info.files ?
     torrent.info.files.map(file => file.length).reduce((a, b) => a + b) :
     torrent.info.length;
-
   return bignum.toBuffer(size, {size: 8});
 };
 
 module.exports.pieceLen = (torrent, pieceIndex) => {
   const totalLength = bignum.fromBuffer(this.size(torrent)).toNumber();
   const pieceLength = torrent.info['piece length'];
-
   const lastPieceLength = totalLength % pieceLength;
   const lastPieceIndex = Math.floor(totalLength / pieceLength);
-
   return lastPieceIndex === pieceIndex ? lastPieceLength : pieceLength;
 };
 
@@ -41,9 +38,7 @@ module.exports.blocksPerPiece = (torrent, pieceIndex) => {
 
 module.exports.blockLen = (torrent, pieceIndex, blockIndex) => {
   const pieceLength = this.pieceLen(torrent, pieceIndex);
-
   const lastPieceLength = pieceLength % this.BLOCK_LEN;
   const lastPieceIndex = Math.floor(pieceLength / this.BLOCK_LEN);
-
   return blockIndex === lastPieceIndex ? lastPieceLength : this.BLOCK_LEN;
 };

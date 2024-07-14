@@ -10,12 +10,15 @@ const util = require('./util');
 module.exports.getPeers = (torrent, callback) => {
   const socket = dgram.createSocket('udp4');
   const url = torrent.announce.toString('utf8');
-
   console.log(`Connecting to tracker: ${url}`);
 
   socket.on('error', (err) => {
     console.error(`Tracker connection error: ${err.message}`);
     socket.close();
+  });
+
+  socket.on('listening', () => {
+    console.log('UDP socket listening');
   });
 
   // Set a timeout for the tracker connection
@@ -30,6 +33,7 @@ module.exports.getPeers = (torrent, callback) => {
 
   socket.on('message', response => {
     clearTimeout(timeout);
+    console.log(`Received response from tracker. Type: ${respType(response)}`);
 
     if (respType(response) === 'connect') {
       // 2. receive and parse connect response
@@ -60,7 +64,6 @@ function respType(resp) {
 
 function buildConnReq() {
   const buf = Buffer.allocUnsafe(16);
-
   // connection id
   buf.writeUInt32BE(0x417, 0);
   buf.writeUInt32BE(0x27101980, 4);
@@ -68,7 +71,6 @@ function buildConnReq() {
   buf.writeUInt32BE(0, 8);
   // transaction id
   crypto.randomBytes(4).copy(buf, 12);
-
   return buf;
 }
 
@@ -82,7 +84,6 @@ function parseConnResp(resp) {
 
 function buildAnnounceReq(connId, torrent, port=6881) {
   const buf = Buffer.allocUnsafe(98);
-
   // connection id
   connId.copy(buf, 0);
   // action
@@ -109,7 +110,6 @@ function buildAnnounceReq(connId, torrent, port=6881) {
   buf.writeInt32BE(-1, 92);
   // port
   buf.writeUInt16BE(port, 96);
-
   return buf;
 }
 
