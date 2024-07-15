@@ -61,7 +61,6 @@ module.exports.getPeers = (torrent, callback) => {
     }, 15000); // 15 seconds timeout
 };
 
-
 function udpSend(socket, message, rawUrl, callback=()=>{}) {
     const url = urlParse(rawUrl);
     let port = url.port ? parseInt(url.port) : 80;  // Default to 80 if no port specified

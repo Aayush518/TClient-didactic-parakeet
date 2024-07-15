@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 const net = require('net');
 const tracker = require('./tracker');
 const message = require('./message');
@@ -9,8 +10,8 @@ const Queue = require('./Queue');
 const torrentParser = require('./torrent-parser');
 
 let downloadInfo = {
-    fileName: '',
-    fileSize: 0,
+    files: [],
+    totalSize: 0,
     progress: 0,
     timePoints: [],
     speeds: [],
@@ -23,10 +24,15 @@ let downloadInfo = {
     status: 'Initializing'
 };
 
-module.exports = (torrent, path) => {
-    downloadInfo.fileName = path;
-    downloadInfo.fileSize = torrentParser.size(torrent).readUIntBE(0, 6);
-    downloadInfo.remainingSize = downloadInfo.fileSize;
+module.exports = (torrent, savePath) => {
+    const files = torrentParser.files(torrent);
+    downloadInfo.files = files.map(file => ({
+        name: file.name,
+        size: file.length,
+        downloaded: 0
+    }));
+    downloadInfo.totalSize = files.reduce((total, file) => total + file.length, 0);
+    downloadInfo.remainingSize = downloadInfo.totalSize;
 
     tracker.getPeers(torrent, peers => {
         console.log(`Got ${peers.length} peers`);
@@ -40,14 +46,26 @@ module.exports = (torrent, path) => {
         }
 
         const pieces = new Pieces(torrent);
-        const file = fs.openSync(path, 'w');
-        peers.forEach(peer => download(peer, torrent, pieces, file));
+        files.forEach(file => {
+            let filePath = file.name;
+            if (Buffer.isBuffer(filePath)) {
+                filePath = filePath.toString('utf8');
+            } else if (Array.isArray(filePath)) {
+                filePath = filePath.map(p => Buffer.isBuffer(p) ? p.toString('utf8') : p).join(path.sep);
+            }
+            
+            const fullPath = path.join(savePath, filePath);
+            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+            file.fileHandle = fs.openSync(fullPath, 'w');
+        });
+        peers.forEach(peer => download(peer, torrent, pieces, files));
     });
 };
 
+
 module.exports.getDownloadInfo = () => downloadInfo;
 
-function download(peer, torrent, pieces, file) {
+function download(peer, torrent, pieces, files) {
     const socket = new net.Socket();
     
     socket.setTimeout(10000);
@@ -55,32 +73,40 @@ function download(peer, torrent, pieces, file) {
     socket.on('timeout', () => {
         console.warn(`Connection to peer ${peer.ip}:${peer.port} timed out`);
         socket.destroy();
+        retryConnection(peer, torrent, pieces, files);
     });
 
     socket.on('error', (err) => {
         console.warn(`Error connecting to peer ${peer.ip}:${peer.port}: ${err.message}`);
+        retryConnection(peer, torrent, pieces, files);
     });
 
     socket.connect(peer.port, peer.ip, () => {
         console.log(`Connected to peer: ${peer.ip}:${peer.port}`);
-        const peerIndex = downloadInfo.peers.findIndex(p => p.ip === peer.ip && p.port === peer.port);
-        if (peerIndex !== -1) {
-            downloadInfo.peers[peerIndex].connected = true;
-            downloadInfo.connectedPeers++;
-        }
+        updatePeerStatus(peer, true);
         socket.write(message.buildHandshake(torrent));
     });
 
     socket.on('close', () => {
-        const peerIndex = downloadInfo.peers.findIndex(p => p.ip === peer.ip && p.port === peer.port);
-        if (peerIndex !== -1 && downloadInfo.peers[peerIndex].connected) {
-            downloadInfo.peers[peerIndex].connected = false;
-            downloadInfo.connectedPeers--;
-        }
+        updatePeerStatus(peer, false);
     });
 
     const queue = new Queue(torrent);
-    onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue, torrent, file));
+    onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue, torrent, files));
+}
+
+function retryConnection(peer, torrent, pieces, files) {
+    setTimeout(() => {
+        download(peer, torrent, pieces, files);
+    }, 5000); // Retry after 5 seconds
+}
+
+function updatePeerStatus(peer, connected) {
+    const peerIndex = downloadInfo.peers.findIndex(p => p.ip === peer.ip && p.port === peer.port);
+    if (peerIndex !== -1) {
+        downloadInfo.peers[peerIndex].connected = connected;
+        downloadInfo.connectedPeers += connected ? 1 : -1;
+    }
 }
 
 function onWholeMsg(socket, callback) {
@@ -99,7 +125,7 @@ function onWholeMsg(socket, callback) {
     });
 }
 
-function msgHandler(msg, socket, pieces, queue, torrent, file) {
+function msgHandler(msg, socket, pieces, queue, torrent, files) {
     if (isHandshake(msg)) {
         socket.write(message.buildInterested());
     } else {
@@ -109,7 +135,7 @@ function msgHandler(msg, socket, pieces, queue, torrent, file) {
         if (m.id === 1) unchokeHandler(socket, pieces, queue);
         if (m.id === 4) haveHandler(socket, pieces, queue, m.payload);
         if (m.id === 5) bitfieldHandler(socket, pieces, queue, m.payload);
-        if (m.id === 7) pieceHandler(socket, pieces, queue, torrent, file, m.payload);
+        if (m.id === 7) pieceHandler(socket, pieces, queue, torrent, files, m.payload);
     }
 }
 
@@ -143,15 +169,23 @@ function bitfieldHandler(socket, pieces, queue, payload) {
     if (queueEmpty) requestPiece(socket, pieces, queue);
 }
 
-function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
+function pieceHandler(socket, pieces, queue, torrent, files, pieceResp) {
     pieces.addReceived(pieceResp);
 
     const offset = pieceResp.index * torrent.info['piece length'] + pieceResp.begin;
-    fs.write(file, pieceResp.block, 0, pieceResp.block.length, offset, () => {});
+    let fileOffset = 0;
+    for (let file of files) {
+        if (offset < fileOffset + file.length) {
+            const pieceOffset = offset - fileOffset;
+            fs.write(file.fileHandle, pieceResp.block, 0, pieceResp.block.length, pieceOffset, () => {});
+            break;
+        }
+        fileOffset += file.length;
+    }
 
     downloadInfo.downloadedSize += pieceResp.block.length;
-    downloadInfo.remainingSize = downloadInfo.fileSize - downloadInfo.downloadedSize;
-    downloadInfo.progress = (downloadInfo.downloadedSize / downloadInfo.fileSize) * 100;
+    downloadInfo.remainingSize = downloadInfo.totalSize - downloadInfo.downloadedSize;
+    downloadInfo.progress = (downloadInfo.downloadedSize / downloadInfo.totalSize) * 100;
 
     downloadInfo.status = 'Downloading';
 
@@ -168,7 +202,9 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
         console.log('Download complete!');
         downloadInfo.status = 'Complete';
         socket.end();
-        try { fs.closeSync(file); } catch(e) {}
+        files.forEach(file => {
+            try { fs.closeSync(file.fileHandle); } catch(e) {}
+        });
     } else {
         requestPiece(socket, pieces, queue);
     }

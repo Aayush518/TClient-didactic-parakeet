@@ -1,22 +1,32 @@
 'use strict';
-
 const blessed = require('blessed');
 const contrib = require('blessed-contrib');
 const download = require('./src/download');
 const torrentParser = require('./src/torrent-parser');
+const path = require('path');
 
 if (process.argv.length < 3) {
     console.error('Usage: node index.js <path_to_torrent_file>');
     process.exit(1);
 }
 
-const torrent = torrentParser.open(process.argv[2]);
+const torrentPath = process.argv[2];
+const torrent = torrentParser.open(torrentPath);
+
+// Determine save path (you might want to customize this)
+const savePath = path.join(process.cwd(), torrent.info.name.toString('utf8'));
+if (typeof savePath !== 'string') {
+    console.error('Save path must be a string');
+    process.exit(1);
+}
 
 const screen = blessed.screen({
     smartCSR: true,
     title: 'BitTorrent Client',
     fullUnicode: true
 });
+
+let uiMode = true;
 
 // Create a grid layout
 const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
@@ -64,11 +74,33 @@ const logBox = grid.set(8, 0, 4, 6, blessed.log, {
     bufferLength: 50
 });
 
+// Terminal output box
+const terminalBox = blessed.box({
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    content: '',
+    hidden: true
+});
+
+screen.append(terminalBox);
+
 screen.key(['escape', 'q', 'C-c'], function(ch, key) {
     return process.exit(0);
 });
 
-download(torrent, torrent.info.name);
+screen.key(['p'], function(ch, key) {
+    uiMode = !uiMode;
+    if (uiMode) {
+        terminalBox.hide();
+    } else {
+        terminalBox.show();
+    }
+    screen.render();
+});
+
+download(torrent, savePath);
 
 function formatSize(bytes) {
     if (isNaN(bytes) || bytes === 0) return '0 B';
@@ -79,13 +111,13 @@ function formatSize(bytes) {
 }
 
 function updateUI(downloadInfo) {
-    if (!downloadInfo) return;
+    if (!downloadInfo || !uiMode) return;
 
     // Update file info
-    fileInfoBox.setContent(
-        `File: ${downloadInfo.fileName}\n` +
-        `Size: ${formatSize(downloadInfo.fileSize)}`
-    );
+    let fileInfoContent = downloadInfo.files.map(file => 
+        `${file.name}: ${formatSize(file.size)}`
+    ).join('\n');
+    fileInfoBox.setContent(fileInfoContent);
 
     // Update progress bar
     progressBar.setPercent(downloadInfo.progress || 0);
@@ -120,7 +152,28 @@ function updateUI(downloadInfo) {
     screen.render();
 }
 
-setInterval(() => updateUI(download.getDownloadInfo()), 1000);
+function updateTerminal(downloadInfo) {
+    if (!downloadInfo || uiMode) return;
+
+    let content = '';
+    content += `Total Progress: ${downloadInfo.progress.toFixed(2)}%\n`;
+    content += `Download Speed: ${formatSize(downloadInfo.speeds[downloadInfo.speeds.length - 1] * 1024)}/s\n`;
+    content += `Status: ${downloadInfo.status}\n`;
+    content += `Connected Peers: ${downloadInfo.connectedPeers}/${downloadInfo.totalPeers}\n\n`;
+
+    downloadInfo.files.forEach(file => {
+        content += `${file.name}: ${formatSize(file.downloaded)}/${formatSize(file.size)}\n`;
+    });
+
+    terminalBox.setContent(content);
+    screen.render();
+}
+
+setInterval(() => {
+    const info = download.getDownloadInfo();
+    updateUI(info);
+    updateTerminal(info);
+}, 1000);
 
 // Enable scrolling for peer list
 peerList.focus();

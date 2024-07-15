@@ -1,5 +1,4 @@
 'use strict';
-
 const Buffer = require('buffer').Buffer;
 const torrentParser = require('./torrent-parser');
 const util = require('./util');
