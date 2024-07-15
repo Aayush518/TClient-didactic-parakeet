@@ -22,26 +22,22 @@ const screen = blessed.screen({
 const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
 
 // File info box
-const fileInfoBox = grid.set(0, 0, 4, 6, contrib.lcd, {
-    label: 'File Size (Bytes)',
-    segmentWidth: 0.06,
-    segmentInterval: 0.11,
-    strokeWidth: 0.1,
-    elements: 8,
-    display: '00000000',
-    elementSpacing: 4,
-    elementPadding: 2
+const fileInfoBox = grid.set(0, 0, 2, 6, blessed.box, {
+    label: 'File Info',
+    content: 'Initializing...',
+    border: {type: 'line'},
+    style: {border: {fg: 'green'}}
 });
 
 // Progress bar
-const progressBar = grid.set(4, 0, 2, 6, contrib.gauge, {
+const progressBar = grid.set(2, 0, 2, 6, contrib.gauge, {
     label: 'Download Progress',
     stroke: 'green',
     fill: 'white'
 });
 
 // Download stats
-const downloadStats = grid.set(6, 0, 6, 6, contrib.table, {
+const downloadStats = grid.set(4, 0, 4, 6, contrib.table, {
     keys: true,
     fg: 'green',
     label: 'Download Stats',
@@ -55,7 +51,9 @@ const peerList = grid.set(0, 6, 12, 6, contrib.table, {
     fg: 'green',
     label: 'Peers',
     columnSpacing: 1,
-    columnWidth: [20, 10, 15]
+    columnWidth: [15, 10, 15],
+    interactive: true,
+    mouse: true
 });
 
 // Log box
@@ -84,17 +82,18 @@ function updateUI(downloadInfo) {
     if (!downloadInfo) return;
 
     // Update file info
-    fileInfoBox.setDisplay(downloadInfo.fileSize.toString().padStart(8, '0'));
+    fileInfoBox.setContent(
+        `File: ${downloadInfo.fileName}\n` +
+        `Size: ${formatSize(downloadInfo.fileSize)}`
+    );
 
     // Update progress bar
-    progressBar.setPercent(downloadInfo.progress);
+    progressBar.setPercent(downloadInfo.progress || 0);
 
     // Update download stats
     downloadStats.setData({
         headers: ['Stat', 'Value'],
         data: [
-            ['File Name', downloadInfo.fileName],
-            ['File Size', formatSize(downloadInfo.fileSize)],
             ['Downloaded', formatSize(downloadInfo.downloadedSize)],
             ['Remaining', formatSize(downloadInfo.remainingSize)],
             ['Speed', formatSize(downloadInfo.speeds[downloadInfo.speeds.length - 1] * 1024) + '/s'],
@@ -105,7 +104,7 @@ function updateUI(downloadInfo) {
     });
 
     // Update peer list
-    const peerData = downloadInfo.peers.slice(0, 20).map(peer => [
+    const peerData = downloadInfo.peers.map(peer => [
         peer.ip,
         peer.port.toString(),
         peer.connected ? 'Connected' : 'Not Connected'
@@ -122,3 +121,14 @@ function updateUI(downloadInfo) {
 }
 
 setInterval(() => updateUI(download.getDownloadInfo()), 1000);
+
+// Enable scrolling for peer list
+peerList.focus();
+screen.key(['up', 'down'], function(ch, key) {
+    if (key.name === 'up') {
+        peerList.rows.scroll(-1);
+    } else if (key.name === 'down') {
+        peerList.rows.scroll(1);
+    }
+    screen.render();
+});

@@ -152,6 +152,7 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
     downloadInfo.downloadedSize += pieceResp.block.length;
     downloadInfo.remainingSize = downloadInfo.fileSize - downloadInfo.downloadedSize;
     downloadInfo.progress = (downloadInfo.downloadedSize / downloadInfo.fileSize) * 100;
+
     downloadInfo.status = 'Downloading';
 
     const now = Date.now();
