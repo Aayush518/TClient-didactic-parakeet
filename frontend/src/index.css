@@ -1,0 +1,62 @@
+/* frontend/src/App.css */
+.App {
+  font-family: Arial, sans-serif;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.input-container {
+  margin-bottom: 20px;
+}
+
+input[type="text"] {
+  width: 300px;
+  padding: 5px;
+  margin-right: 10px;
+}
+
+button {
+  padding: 5px 10px;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.file-info, .progress-bar, .download-stats, .peer-list, .log-box {
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.progress {
+  background-color: #f0f0f0;
+  height: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-inner {
+  background-color: #4caf50;
+  height: 100%;
+  transition: width 0.5s ease-in-out;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 5px;
+  text-align: left;
+}
+
+.logs {
+  max-height: 200px;
+  overflow-y: auto;
+}
