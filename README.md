@@ -1,6 +1,6 @@
 # Torrent
 
-A sleek, modern BitTorrent client with a hacker-inspired dark interface built using React and Node.js.
+A sleek, modern BitTorrent client with a dark-inspired dark interface built using React and Node.js.
 
 
 ## Features
