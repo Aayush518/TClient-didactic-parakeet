@@ -1,6 +1,6 @@
 'use strict';
 
-const tp = require('./torrent-parser');
+const tp = require('../utils/torrent-parser');
 
 module.exports = class {
     constructor(torrent) {
@@ -22,8 +22,8 @@ module.exports = class {
     }
 
     deque() { return this._queue.shift(); }
-    
+
     peek() { return this._queue[0]; }
-    
+
     length() { return this._queue.length; }
 };

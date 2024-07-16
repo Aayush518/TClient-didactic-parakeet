@@ -1,7 +1,8 @@
 'use strict';
+
 const Buffer = require('buffer').Buffer;
-const torrentParser = require('./torrent-parser');
-const util = require('./util');
+const torrentParser = require('../utils/torrent-parser');
+const util = require('../utils/util');
 
 module.exports.buildHandshake = torrent => {
     const buf = Buffer.alloc(68);

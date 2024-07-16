@@ -5,9 +5,9 @@ const path = require('path');
 const net = require('net');
 const tracker = require('./tracker');
 const message = require('./message');
-const Pieces = require('./Pieces');
-const Queue = require('./Queue');
-const torrentParser = require('./torrent-parser');
+const Pieces = require('./pieces');
+const Queue = require('./queue');
+const torrentParser = require('../utils/torrent-parser');
 
 let downloadInfo = {
     files: [],
@@ -61,7 +61,6 @@ module.exports = (torrent, savePath) => {
         peers.forEach(peer => download(peer, torrent, pieces, files));
     });
 };
-
 
 module.exports.getDownloadInfo = () => downloadInfo;
 

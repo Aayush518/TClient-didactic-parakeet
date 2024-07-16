@@ -1,4 +1,5 @@
 'use strict';
+
 const fs = require('fs');
 const bencode = require('bencode');
 const crypto = require('crypto');
@@ -46,7 +47,6 @@ module.exports.blockLen = (torrent, pieceIndex, blockIndex) => {
 
     return blockIndex === lastPieceIndex ? lastPieceLength : this.BLOCK_LEN;
 };
-
 
 module.exports.files = torrent => {
     const files = torrent.info.files || [{ length: torrent.info.length, path: [torrent.info.name] }];
